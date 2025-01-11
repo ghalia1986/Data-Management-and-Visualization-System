@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>Options d'analyse</h4>
+            </div>
+            <div class="card-body">
+                <form id="analysisForm" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="analysis_type" class="form-label">Type d'analyse</label>
+                        {{ form.analysis_type }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="variable_1" class="form-label">Variable 1</label>
+                        {{ form.variable_1 }}
+                    </div>
+                    <div class="mb-3" id="var2-container">
+                        <label for="variable_2" class="form-label">Variable 2</label>
+                        {{ form.variable_2 }}
+                    </div>
+                    <button type="submit" class="btn btn-primary">Analyser</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <div class="row">
+            <div class="col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h4>Statistiques</h4>
+                    </div>
+                    <div class="card-body" id="statsContainer">
+                        <div class="alert alert-info">
+                            Sélectionnez des variables pour commencer l'analyse
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h4>Visualisations Matplotlib</h4>
+                    </div>
+                    <div class="card-body" id="matplotlibContainer">
+                        <div class="row" id="matplotlibPlots"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h4>Visualisations Seaborn</h4>
+                    </div>
+                    <div class="card-body" id="seabornContainer">
+                        <div class="row" id="seabornPlots"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    const form = $('#analysisForm');
+    const var2Container = $('#var2-container');
+    
+    $('#id_analysis_type').change(function() {
+        var2Container.toggle($(this).val() === 'bivariate');
+    });
+    
+    form.on('submit', function(e) {
+        e.preventDefault();
+        
+        $.ajax({
+            url: '{% url "analysis" dataset.id %}',
+            type: 'POST',
+            data: form.serialize(),
+            success: function(response) {
+                displayStats(response.stats);
+                displayPlots(response.plots);
+            }
+        });
+    });
+    
+    function displayStats(stats) {
+        let html = '<div class="table-responsive"><table class="table">';
+        
+        for (const [key, value] of Object.entries(stats)) {
+            if (typeof value === 'object') {
+                html += `<tr><th colspan="2" class="table-secondary">${key}</th></tr>`;
+                for (const [subKey, subValue] of Object.entries(value)) {
+                    html += `<tr><td>${subKey}</td><td>${typeof subValue === 'number' ? subValue.toFixed(4) : subValue}</td></tr>`;
+                }
+            } else {
+                html += `<tr><td>${key}</td><td>${typeof value === 'number' ? value.toFixed(4) : value}</td></tr>`;
+            }
+        }
+        
+        html += '</table></div>';
+        $('#statsContainer').html(html);
+    }
+    
+    function displayPlots(plots) {
+        const matplotlibPlots = $('#matplotlibPlots');
+        const seabornPlots = $('#seabornPlots');
+        
+        matplotlibPlots.empty();
+        seabornPlots.empty();
+        
+        for (const [key, value] of Object.entries(plots)) {
+            const plotHtml = `
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title">${key.replace(/_/g, ' ').toUpperCase()}</h5>
+                        </div>
+                        <div class="card-body text-center">
+                            <img src="data:image/png;base64,${value}" class="img-fluid" alt="${key}">
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            if (key.startsWith('matplotlib')) {
+                matplotlibPlots.append(plotHtml);
+            } else {
+                seabornPlots.append(plotHtml);
+            }
+        }
+    }
+});
+</script>
+{% endblock %}
